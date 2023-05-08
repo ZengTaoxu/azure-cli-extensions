@@ -7,7 +7,6 @@
 
 VnetConfiguration = {
     "infrastructureSubnetId": None,
-    "runtimeSubnetId": None,
     "dockerBridgeCidr": None,
     "platformReservedCidr": None,
     "platformReservedDnsIP": None
@@ -19,9 +18,16 @@ ManagedEnvironment = {
     "properties": {
         "daprAIInstrumentationKey": None,
         "vnetConfiguration": None,  # VnetConfiguration
-        "internalLoadBalancerEnabled": None,
-        "appLogsConfiguration": None
+        "appLogsConfiguration": None,
+        "customDomainConfiguration": None,  # CustomDomainConfiguration,
+        "workloadProfiles": None
     }
+}
+
+CustomDomainConfiguration = {
+    "dnsSuffix": None,
+    "certificateValue": None,
+    "certificatePassword": None
 }
 
 AppLogsConfiguration = {
@@ -40,7 +46,11 @@ Dapr = {
     "enabled": False,
     "appId": None,
     "appProtocol": None,
-    "appPort": None
+    "appPort": None,
+    "httpReadBufferSize": None,
+    "httpMaxRequestSize": None,
+    "logLevel": None,
+    "enableApiLogging": None
 }
 
 EnvironmentVar = {
@@ -69,10 +79,16 @@ Container = {
     "volumeMounts": None,  # [VolumeMount]
 }
 
+SecretVolumeItem = {
+    "secretRef": None,
+    "path": None,
+}
+
 Volume = {
     "name": None,
-    "storageType": "EmptyDir",  # AzureFile or EmptyDir
-    "storageName": None  # None for EmptyDir, otherwise name of storage resource
+    "storageType": "EmptyDir",  # AzureFile, EmptyDir or Secret
+    "storageName": None,   # None for EmptyDir or Secret, otherwise name of storage resource
+    "secrets": None,  # [SecretVolumeItem]
 }
 
 ScaleRuleAuth = {
@@ -100,13 +116,15 @@ HttpScaleRule = {
 ScaleRule = {
     "name": None,
     "azureQueue": None,  # QueueScaleRule
-    "customScaleRule": None,  # CustomScaleRule
-    "httpScaleRule": None,  # HttpScaleRule
+    "custom": None,  # CustomScaleRule
+    "http": None,  # HttpScaleRule
 }
 
 Secret = {
     "name": None,
-    "value": None
+    "value": None,
+    "keyVaultUrl": None,
+    "identity": None
 }
 
 Scale = {
@@ -135,9 +153,12 @@ Ingress = {
     "fqdn": None,
     "external": False,
     "targetPort": None,
-    "transport": None,  # 'auto', 'http', 'http2'
+    "transport": None,  # 'auto', 'http', 'http2', 'tcp'
+    "exposedPort": None,
     "traffic": None,  # TrafficWeight
-    "customDomains": None  # [CustomDomain]
+    "customDomains": None,  # [CustomDomain]
+    "ipSecurityRestrictions": None,  # [IPSecurityRestrictions]
+    "stickySessions": None  # StickySessions
 }
 
 RegistryCredentials = {
@@ -149,6 +170,7 @@ RegistryCredentials = {
 Template = {
     "revisionSuffix": None,
     "containers": None,  # [Container]
+    "initContainers": None,  # [Container]
     "scale": Scale,
     "volumes": None  # [Volume]
 }
@@ -174,9 +196,10 @@ ContainerApp = {
     "location": None,
     "identity": None,  # ManagedServiceIdentity
     "properties": {
-        "managedEnvironmentId": None,
+        "environmentId": None,
         "configuration": None,  # Configuration
-        "template": None  # Template
+        "template": None,  # Template
+        "workloadProfileName": None
     },
     "tags": None
 }
@@ -261,4 +284,12 @@ AzureFileProperties = {
     "accountKey": None,
     "accessMode": None,
     "shareName": None
+}
+
+ManagedCertificateEnvelop = {
+    "location": None,  # str
+    "properties": {
+        "subjectName": None,  # str
+        "validationMethod": None  # str
+    }
 }

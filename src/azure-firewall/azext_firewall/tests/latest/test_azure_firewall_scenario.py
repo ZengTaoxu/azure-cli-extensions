@@ -6,6 +6,7 @@
 from azure.cli.testsdk import (ScenarioTest, ResourceGroupPreparer, StorageAccountPreparer, JMESPathCheck, NoneCheck,
                                api_version_constraint)
 from azure.cli.testsdk.scenario_tests.decorators import AllowLargeResponse
+from azure.cli.core.azclierror import ValidationError
 
 
 class AzureFirewallScenario(ScenarioTest):
@@ -21,7 +22,6 @@ class AzureFirewallScenario(ScenarioTest):
 
     @ResourceGroupPreparer(name_prefix='cli_test_azure_firewall')
     def test_azure_firewall(self, resource_group):
-
         self.kwargs.update({
             'af': 'af1',
             'coll': 'rc1',
@@ -30,15 +30,40 @@ class AzureFirewallScenario(ScenarioTest):
         })
         self.cmd('network firewall create -g {rg} -n {af} --threat-intel-mode Alert --allow-active-ftp', checks=[
             self.check('threatIntelMode', 'Alert'),
-            self.check('"Network.FTP.AllowActiveFTP"', 'true')
+            self.check('additionalProperties."Network.FTP.AllowActiveFTP"', 'true')
         ])
         self.cmd('network firewall update -g {rg} -n {af} --threat-intel-mode Deny --allow-active-ftp false', checks=[
             self.check('threatIntelMode', 'Deny'),
-            self.not_exists('"Network.FTP.AllowActiveFTP"')
+            self.not_exists('additionalProperties."Network.FTP.AllowActiveFTP"')
         ])
         self.cmd('network firewall show -g {rg} -n {af}')
         self.cmd('network firewall list -g {rg}')
         self.cmd('network firewall delete -g {rg} -n {af}')
+
+    @ResourceGroupPreparer(name_prefix="cli_test_firewall_with_additional_log_", location="westus")
+    def test_firewall_with_additional_log(self):
+        self.kwargs.update({
+            "firewall_name": self.create_random_name("firewall-", 16)
+        })
+
+        self.cmd(
+            "network firewall create -n {firewall_name} -g {rg} "
+            "--enable-fat-flow-logging --enable-udp-log-optimization",
+            checks=[
+                self.check('additionalProperties."Network.AdditionalLogs.EnableFatFlowLogging"', "true"),
+                self.check('additionalProperties."Network.AdditionalLogs.EnableUdpLogOptimization"', "true")
+            ]
+        )
+        self.cmd(
+             "network firewall update -n {firewall_name} -g {rg} "
+             "--enable-fat-flow-logging false --enable-udp-log-optimization false",
+             checks=[
+                 self.not_exists('additionalProperties."Network.AdditionalLogs.EnableFatFlowLogging"'),
+                 self.not_exists('additionalProperties."Network.AdditionalLogs.EnableUdpLogOptimization"')
+             ]
+        )
+
+        self.cmd("network firewall delete -n {firewall_name} -g {rg}")
 
     @ResourceGroupPreparer(name_prefix='cli_test_azure_firewall_ip_config')
     def test_azure_firewall_ip_config(self, resource_group):
@@ -156,7 +181,7 @@ class AzureFirewallScenario(ScenarioTest):
             'af': 'af1',
         })
         self.cmd('network firewall create -g {rg} -n {af} --private-ranges 10.0.0.0 10.0.0.0/24 IANAPrivateRanges', checks=[
-            self.check('"Network.SNAT.PrivateRanges"', '10.0.0.0, 10.0.0.0/24, IANAPrivateRanges')
+            self.check('additionalProperties."Network.SNAT.PrivateRanges"', '10.0.0.0, 10.0.0.0/24, IANAPrivateRanges')
         ])
         self.cmd('network firewall threat-intel-allowlist create -g {rg} -n {af} --ip-addresses 10.0.0.0 10.0.0.1 --fqdns www.bing.com *.microsoft.com *google.com', checks=[
             self.check('"ThreatIntel.Whitelist.FQDNs"', 'www.bing.com, *.microsoft.com, *google.com'),
@@ -171,7 +196,7 @@ class AzureFirewallScenario(ScenarioTest):
             self.check('"ThreatIntel.Whitelist.IpAddresses"', '10.0.0.1, 10.0.0.0')
         ])
         self.cmd('network firewall update -g {rg} -n {af} --private-ranges IANAPrivateRanges 10.0.0.1 10.0.0.0/16', checks=[
-            self.check('"Network.SNAT.PrivateRanges"', 'IANAPrivateRanges, 10.0.0.1, 10.0.0.0/16')
+            self.check('additionalProperties."Network.SNAT.PrivateRanges"', 'IANAPrivateRanges, 10.0.0.1, 10.0.0.0/16')
         ])
         self.cmd('network firewall threat-intel-allowlist delete -g {rg} -n {af}')
 
@@ -287,6 +312,7 @@ class AzureFirewallScenario(ScenarioTest):
         # ])
         # self.cmd('network firewall show -g {rg} -n {af}')
 
+    @AllowLargeResponse(size_kb=10240)
     @ResourceGroupPreparer(name_prefix='cli_test_azure_firewall_with_firewall_policy', location='westus2')
     def test_azure_firewall_with_firewall_policy(self, resource_group, resource_group_location):
         self.kwargs.update({
@@ -461,6 +487,7 @@ class AzureFirewallScenario(ScenarioTest):
                      self.check('length(signatureOverrides)', 1),
                      self.check('length(privateRanges)', 2)
                  ])
+
     @AllowLargeResponse()
     @ResourceGroupPreparer(name_prefix='cli_test_azure_firewall_policy', location='centralus')
     def test_azure_firewall_policy(self, resource_group, resource_group_location):
@@ -884,7 +911,7 @@ class AzureFirewallScenario(ScenarioTest):
 
         self.cmd('network firewall policy delete -g {rg} --name {policy}')
 
-    @ResourceGroupPreparer(name_prefix='test_firewall_with_dns_proxy')
+    @ResourceGroupPreparer(name_prefix='test_firewall_with_dns_proxy_')
     def test_firewall_with_dns_proxy(self, resource_group):
         self.kwargs.update({
             'rg': resource_group,
@@ -892,25 +919,31 @@ class AzureFirewallScenario(ScenarioTest):
             'dns_servers': '10.0.0.2 10.0.0.3'
         })
 
-        creation_data = self.cmd('network firewall create -g {rg} -n {fw} '
-                                 '--dns-servers {dns_servers} '
-                                 '--enable-dns-proxy false ').get_output_in_json()
-        self.assertEqual(creation_data['name'], self.kwargs['fw'])
-        self.assertEqual(creation_data['Network.DNS.Servers'], "10.0.0.2,10.0.0.3")
-        self.assertEqual(creation_data['Network.DNS.EnableProxy'], 'false')
+        self.cmd('network firewall create -g {rg} -n {fw} '
+                 '--dns-servers {dns_servers} '
+                 '--enable-dns-proxy false',
+                 checks=[
+                     self.check('name', '{fw}'),
+                     self.check('additionalProperties."Network.DNS.Servers"', "10.0.0.2,10.0.0.3"),
+                     self.check('additionalProperties."Network.DNS.EnableProxy"', 'false'),
+                 ])
 
-        show_data = self.cmd('network firewall show -g {rg} -n {fw}').get_output_in_json()
-        self.assertEqual(show_data['name'], self.kwargs['fw'])
-        self.assertEqual(show_data['Network.DNS.Servers'], "10.0.0.2,10.0.0.3")
-        self.assertEqual(show_data['Network.DNS.EnableProxy'], 'false')
+        self.cmd('network firewall show -g {rg} -n {fw}',
+                 checks=[
+                     self.check('name', '{fw}'),
+                     self.check('additionalProperties."Network.DNS.Servers"', "10.0.0.2,10.0.0.3"),
+                     self.check('additionalProperties."Network.DNS.EnableProxy"', 'false'),
+                 ])
 
         self.cmd('network firewall update -g {rg} -n {fw} '
                  '--enable-dns-proxy true').get_output_in_json()
 
-        show_data = self.cmd('network firewall show -g {rg} -n {fw}').get_output_in_json()
-        self.assertEqual(show_data['name'], self.kwargs['fw'])
-        self.assertEqual(show_data['Network.DNS.Servers'], "10.0.0.2,10.0.0.3")
-        self.assertEqual(show_data['Network.DNS.EnableProxy'], 'true')
+        self.cmd('network firewall show -g {rg} -n {fw}',
+                 checks=[
+                     self.check('name', '{fw}'),
+                     self.check('additionalProperties."Network.DNS.Servers"', "10.0.0.2,10.0.0.3"),
+                     self.check('additionalProperties."Network.DNS.EnableProxy"', 'true'),
+                 ])
 
         self.cmd('network firewall delete -g {rg} --name {fw}')
 
@@ -944,3 +977,64 @@ class AzureFirewallScenario(ScenarioTest):
 
         self.cmd('network firewall policy update -g {rg} -n {policy} --sql False',
                  checks=self.check('sql.allowSqlRedirect', False))
+
+    @AllowLargeResponse(size_kb=10240)
+    @ResourceGroupPreparer(name_prefix="cli_test_firewall_basic_sku_", location="westus")
+    def test_firewall_basic_sku(self):
+        self.kwargs.update({
+            "firewall_name": self.create_random_name("firewall-", 16),
+            "vnet_name": self.create_random_name("vnet-", 12),
+            "conf_name": self.create_random_name("ipconfig-", 16),
+            "m_conf_name": self.create_random_name("ipconfig-", 16),
+            "m_public_ip_name": self.create_random_name("public-ip-", 16),
+            "vwan": self.create_random_name("vwan-", 12),
+            "vhub": self.create_random_name("vhub-", 12),
+        })
+
+        with self.assertRaisesRegex(ValidationError, "When creating Basic SKU firewall, both --m-conf-name and --m-public-ip-address should be provided."):
+            self.cmd("network firewall create -n {firewall_name} -g {rg} --sku AZFW_VNet --tier Basic")
+
+        self.cmd("network vnet create -n {vnet_name} -g {rg} --address-prefixes 10.0.0.0/16 --subnet-name AzureFirewallSubnet --subnet-prefixes 10.0.0.0/24")
+        self.cmd("network vnet subnet create -n AzureFirewallManagementSubnet -g {rg} --vnet-name {vnet_name} --address-prefixes 10.0.1.0/24")
+        self.cmd("network public-ip create -n {m_public_ip_name} -g {rg} --sku Standard")
+
+        self.cmd(
+            "network firewall create -n {firewall_name} -g {rg} --sku AZFW_VNet --tier Basic --vnet-name {vnet_name} "
+            "--conf-name {conf_name} --m-conf-name {m_conf_name} --m-public-ip {m_public_ip_name}",
+            checks=[
+                self.check("name", "{firewall_name}"),
+                self.check("sku.tier", "Basic")
+            ]
+        )
+        self.cmd("network firewall delete -n {firewall_name} -g {rg}")
+
+        self.cmd("extension add -n virtual-wan")
+        self.cmd("network vwan create -n {vwan} -g {rg} --type Standard")
+        self.cmd('network vhub create -n {vhub} -g {rg} --vwan {vwan}  --address-prefix 10.0.0.0/24 -l westus --sku Standard')
+        self.cmd(
+            "network firewall create -n {firewall_name} -g {rg} --vhub {vhub} --public-ip-count 2 --sku AZFW_Hub --tier Basic",
+            checks=[
+                self.check("name", "{firewall_name}"),
+                self.check("sku.name", "AZFW_Hub")
+            ]
+        )
+
+    @AllowLargeResponse(size_kb=10240)
+    @ResourceGroupPreparer(name_prefix="cli_test_firewall_with_route_server_", location="eastus2euap")
+    def test_firewall_with_route_server(self):
+        self.kwargs.update({
+            "firewall_name": self.create_random_name("firewall-", 16),
+            "vwan": self.create_random_name("vwan-", 12),
+            "vhub": self.create_random_name("vhub-", 12),
+        })
+
+        self.cmd("extension add -n virtual-wan")
+        self.cmd("network vwan create -n {vwan} -g {rg} --type Standard")
+        vhub = self.cmd('network vhub create -n {vhub} -g {rg} --vwan {vwan} --address-prefix 10.0.0.0/24 -l westus --sku Standard').get_output_in_json()
+        self.kwargs['route_server_id'] = vhub['id']
+
+        self.cmd("network firewall create -n {firewall_name} -g {rg} -l eastus2euap --route-server-id {route_server_id}",
+                 self.check("additionalProperties.\"Network.RouteServerInfo.RouteServerID\"", "{route_server_id}"))
+        self.cmd("network firewall update -n {firewall_name} -g {rg} --route-server-id ''",
+                 self.check("additionalProperties.\"Network.RouteServerInfo.RouteServerID\"", ""))
+        self.cmd("network firewall delete -n {firewall_name} -g {rg}")

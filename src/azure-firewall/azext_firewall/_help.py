@@ -21,6 +21,12 @@ helps['network firewall create'] = """
     - name: Create a Virtual WAN Secure Hub Firewall
       text: |
         az network firewall create -g MyResourceGroup -n MyFirewall --sku AZFW_Hub --tier Standard --virtual-hub MyVirtualHub1 --public-ip-count 1
+    - name: Create a Basic SKU Firewall with Management IP Configuration
+      text: |
+        az network firewall create -g MyResourceGroup -n MyFirewall --sku AZFW_VNet --tier Basic --vnet-name MyVNet --conf-name MyIpConfig --m-conf-name MyManagementIpConfig --m-public-ip MyPublicIp
+    - name: Create a Basic SKU Firewall with Virtual Hub
+      text: |
+        az network firewall create -g MyResourceGroup -n MyFirewall --sku AZFW_Hub --tier Basic --vhub MyVHub --public-ip-count 2
 """
 
 helps['network firewall delete'] = """
